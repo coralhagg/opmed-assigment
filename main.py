@@ -47,7 +47,6 @@ df = df.dropna(subset=['start', 'end'])
 # Convert start and end times to a numerical format (e.g., minutes since midnight)
 df['start_minutes'] = (df['start'].dt.hour * 60 + df['start'].dt.minute).astype(int)
 df['end_minutes'] = (df['end'].dt.hour * 60 + df['end'].dt.minute).astype(int)
-# Ensure the Duration column exists and is calculated correctly
 df['Duration'] = (df['end'] - df['start']).dt.total_seconds() / 3600  # Convert duration to hours
 
 all_surgeries = range(len(df))
@@ -78,13 +77,13 @@ for r in all_rooms:
                 # Ensure surgeries i and j are not assigned to the same room if they overlap
                 model.Add(assigned_room[(i, r)] + assigned_room[(j, r)] <= 1)
 
-# assigned[(a, s)] is True if anesthesiologist a is assigned to surgery s
+# [(a, s)] is True if anesthesiologist a is assigned to surgery s
 assigned = {}
 for a in all_anesthesiologists:
     for s in all_surgeries:
         assigned[(a, s)] = model.NewBoolVar(f"assigned_a{a}_s{s}")
 
-# Ensure each surgery is assigned to at least one anesthesiologist
+# Ensure each surgery is assigned to at one anesthesiologist
 for s in all_surgeries:
     model.Add(sum(assigned[(a, s)] for a in all_anesthesiologists) == 1)
 
@@ -134,7 +133,7 @@ for a in all_anesthesiologists:
     model.Add(shift_duration[a] > 5 * 60).OnlyEnforceIf(is_shift_above_min)
     model.Add(shift_duration[a] <= 5 * 60).OnlyEnforceIf(is_shift_above_min.Not())
 
-    # The base cost is either 5 (minimum cost) or the actual shift duration in hours if above 5 hours
+    # The base cost is either 5 (minimum cost) or the actual shift duration in hours (if above 5 hours)
     base_cost = model.NewIntVar(0, 24, f'base_cost_{a}')
     model.Add(base_cost == 5).OnlyEnforceIf(is_shift_above_min.Not())
     model.Add(base_cost == shift_hours).OnlyEnforceIf(is_shift_above_min)
@@ -163,8 +162,6 @@ model.Minimize(sum(total_cost_a for a in all_anesthesiologists))
 
 # Solve the model
 solver = cp_model.CpSolver()
-# solver.parameters.max_time_in_seconds = 60  # Set a time limit
-# solver.parameters.log_search_progress = True  # Enable logging of the search progress
 status = solver.Solve(model)
 
 if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
@@ -199,7 +196,7 @@ if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
     schedule_df['anesthetist_id'] = 'anesthetist - ' + schedule_df['anesthetist_id'].astype(str)
     schedule_df['room_id'] = 'room - ' + schedule_df['room_id'].astype(str)
     plot_day_schedule(schedule_df)
-    # Save to CSV, without the index if it's not required
+    # Save to CSV
     output_file_path = 'C:\\Users\\coral\\Downloads\\sol.csv'  # Adjust the file path as needed
     print(schedule_df.head())
     schedule_df.to_csv(output_file_path, index=False)
